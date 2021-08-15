@@ -159,7 +159,7 @@ class CustomPage {
 			const _downloadLinksData = await Promise.all(
 				downloadPages
 					.slice(tabs * j, tabs * (j + 1))
-					.map((downloadPage, ep) => this.getDownloadLinkData(downloadPage, ep + 1))
+					.map((downloadPage, ep) => this.getDownloadLinkData(downloadPage, ep + 1 + j * tabs))
 			);
 			downloadLinksData.push(..._downloadLinksData);
 
@@ -228,7 +228,9 @@ const main = async url => {
 				exists = false;
 			}
 
-			const data = exists ? JSON.parse(await fs.readFile(cache, { encoding: 'utf-8' })) : [];
+			let data = exists ? JSON.parse(await fs.readFile(cache, { encoding: 'utf-8' })) : [];
+			data = data.filter(c => c.name !== downloadLinksData.name);
+
 			await fs.writeFile(
 				cache,
 				JSON.stringify([
