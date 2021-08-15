@@ -17,3 +17,5 @@
 ```=>``` Wait for it to download links  
 ```=>``` Make sure IDM is running  
 ```=>``` After its finished, run ```python main.py``` to start the downloads, the downloads will be saved to E:\Anime\\```{name}```  
+
+#### There Probably will be alot of bugs, i havent tested everything, so if u find any, let me know
