@@ -6,9 +6,9 @@
 ```=>``` Internet Download Manager
 
 ###   To Get Started:
-```=>``` First clone this repository
-```=>``` Go into that repo and run ```npm i```
-```=>``` Then after than run ```pip install idm```
+```=>``` First clone this repository \n
+```=>``` Go into that repo and run ```npm i``` \n
+```=>``` Then after than run ```pip install idm``` \n
  
 ###   To Download Anime:
 ```=>``` First get the url of the anime u want to download from https://animekisa.tv/ 
