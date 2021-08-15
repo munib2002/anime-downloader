@@ -1,16 +1,16 @@
 # Anime Downloader
 
-#   Requirements:
+###   Requirements:
 => Node version 12+
 => Python version 3+
 => Internet Download Manager
 
-#   To Get Started:
+###   To Get Started:
 => First clone this repository
 => Go into that repo and run "npm i"
 => Then after than run "pip install idm"
  
-#   To Download Anime:
+###   To Download Anime:
 => First get the url of the anime u want to download from https://animekisa.tv/ 
 => Then go into the repo and run "npm start"
 => Then enter the url when prompted
