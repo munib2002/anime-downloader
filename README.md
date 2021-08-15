@@ -16,4 +16,4 @@
 ```=>``` Then enter the url when prompted  
 ```=>``` Wait for it to download links  
 ```=>``` Make sure IDM is running  
-```=>``` After its finished, run "python main.py" to start the downloads, the downloads will be saved to E:\Anime\\```{name}```  
+```=>``` After its finished, run ```python main.py``` to start the downloads, the downloads will be saved to E:\Anime\\```{name}```  
