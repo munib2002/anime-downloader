@@ -21,7 +21,7 @@ class CustomPage {
 		});
 	}
 
-	constructor(page, browser, url, maxConsecutiveTabs = 10) {
+	constructor(page, browser, url, maxConsecutiveTabs = 5) {
 		this.page = page;
 		this.browser = browser;
 		this.url = url;
