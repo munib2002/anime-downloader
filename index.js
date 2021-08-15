@@ -142,7 +142,8 @@ class CustomPage {
 			waitUntil: 'networkidle0',
 		});
 
-		const animeName = await this.page.evaluate(() => document.querySelector('h1.infodes').innerText);
+		let animeName = await this.page.evaluate(() => document.querySelector('h1.infodes').innerText);
+		animeName = animeName.replace(/:/g, ' - ');
 
 		const downloadPages = await this.getEpDownloadPages();
 
