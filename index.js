@@ -47,7 +47,7 @@ class CustomPage {
 	async getEpDownloadPages() {
 		let downloadPages = [];
 
-		const epCount = await this.page.evaluate(() => document.querySelectorAll('a.infovan').length);
+		const epCount = await this.page.evaluate(() => document.querySelectorAll('.infoepboxmain a').length);
 
 		const tabs = this.maxConsecutiveTabs;
 		const turns = Math.ceil(epCount / tabs);
@@ -55,7 +55,7 @@ class CustomPage {
 
 		batches.length = turns;
 		batches.fill(tabs);
-		batches[turns - 1] = epCount % tabs;
+		batches[turns - 1] = epCount % tabs || tabs;
 
 		console.log(chalk.hex('#80D8FF')(`Total download pages: ${epCount}`));
 		console.log();
@@ -84,8 +84,13 @@ class CustomPage {
 
 		await tempPage.setRequestInterception(true);
 		tempPage.on('request', request => {
-			if (request.url().includes('.anicdn.stream/')) request.abort();
-			else request.continue();
+			if (request.url().includes('.anicdn.stream/')) return request.abort();
+			if (request.url().includes('storage.googleapis.com/')) {
+				downloadLinkData.url = request.url();
+				downloadLinkData.referrer = downloadPage;
+				return request.abort();
+			}
+			request.continue();
 		});
 
 		tempPage.on('response', response => {
@@ -97,13 +102,19 @@ class CustomPage {
 
 		await tempPage.goto(downloadPage, {
 			waitUntil: 'networkidle0',
-			timeout: 100000,
+			timeout: 200000,
 		});
 
 		let downloadQualities = await tempPage.evaluate(() => {
 			return Array.from(document.querySelector('.mirror_link').querySelectorAll('a'))
-				.map(c => ({ q: c.innerText.match(/\d+(?=P)|HD/)[0].replace('HD', 1), url: c.href }))
-				.sort((a, b) => b.q - a.q);
+				.map(c => ({
+					q: c.innerText
+						.match(/\d+(?=P)|HD|SD/)[0]
+						?.replace('HD', 2)
+						.replace('SD', 1),
+					url: c.href,
+				}))
+				.sort((a, b) => +b.q - +a.q);
 		});
 
 		await this.later(2000);
@@ -111,7 +122,7 @@ class CustomPage {
 		for (const qualityObj of downloadQualities) {
 			await tempPage.evaluate(quality => {
 				Array.from(document.querySelector('.mirror_link').querySelectorAll('a'))
-					.filter(c => c.innerText.includes(quality == 1 ? 'HD' : quality))[0]
+					.filter(c => c.innerText.includes(quality == 1 ? 'SD' : quality == 2? 'HD' : quality))[0]
 					.click();
 			}, qualityObj.q);
 
@@ -124,7 +135,7 @@ class CustomPage {
 
 			await tempPage.goto(downloadPage, {
 				waitUntil: 'networkidle0',
-				timeout: 100000,
+				timeout: 200000,
 			});
 
 			await this.later(1000);
@@ -157,9 +168,14 @@ class CustomPage {
 
 		for (let j = 0; j < turns; j++) {
 			const _downloadLinksData = await Promise.all(
-				downloadPages
-					.slice(tabs * j, tabs * (j + 1))
-					.map((downloadPage, ep) => this.getDownloadLinkData(downloadPage, ep + 1 + j * tabs))
+				downloadPages.slice(tabs * j, tabs * (j + 1)).map(async (downloadPage, ep) => {
+					let downloadLinkData;
+					for (let k = 0; k < 2; k++) {
+						downloadLinkData = await this.getDownloadLinkData(downloadPage, ep + 1 + j * tabs);
+						if (downloadLinkData.url && downloadLinkData.referrer) break;
+					}
+					return downloadLinkData;
+				})
 			);
 			downloadLinksData.push(..._downloadLinksData);
 
@@ -210,11 +226,15 @@ const main = async url => {
 		console.log(chalk.hex('#69F0AE')('Successfully closed puppeteer!'));
 		console.log();
 
-		const success = !downloadLinksData.links.includes(c => !c.referrer || !c.url);
+		const failedEps = downloadLinksData.links.filter(c => !c.referrer || !c.url);
 
-		console.log(chalk.hex('#80D8FF')('Got all links:'), chalk.hex(success ? '#00C853' : '#DD2C00')(success));
+		console.log(
+			chalk.hex('#80D8FF')('Got all links:'),
+			chalk.hex(failedEps.length ? '#DD2C00' : '#00C853')(!failedEps.length)
+		);
+		if (failedEps.length) console.log(chalk.hex('#DD2C00')(`Failed to fetch download links for these episodes: ${failedEps.reduce((a,c) => `${a} ${c.ep}`, '')}`));
 		console.log();
-		if (success) {
+		if (!failedEps.length) {
 			try {
 				await fs.mkdir(path.join(__dirname, './cache'));
 			} catch (e) {}
@@ -266,6 +286,6 @@ rl.question(chalk.bold.hex('#F8EFBA')('Input exact anime url from animekisa.tv: 
 	console.log(chalk.hex('#80D8FF')(url));
 	console.log();
 
-	main(url);
+	main(url).catch(e => { console.log(e); console.log(chalk.hex('#DD2C00')('An error occurred'))});
 	rl.close();
 });
