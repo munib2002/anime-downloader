@@ -3,6 +3,8 @@ const path = require('path');
 const readline = require('readline');
 const puppeteer = require('puppeteer');
 const chalk = require('chalk');
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
 
 class CustomPage {
 	static async build(url) {
@@ -12,6 +14,7 @@ class CustomPage {
 		});
 
 		const page = await browser.newPage();
+		await (await browser.pages())[0].close();
 		const customPage = new CustomPage(page, browser, url);
 
 		return new Proxy(customPage, {
@@ -21,11 +24,18 @@ class CustomPage {
 		});
 	}
 
-	constructor(page, browser, url, maxConsecutiveTabs = 5) {
+	constructor(
+		page,
+		browser,
+		url,
+		downloadQualities = ['1080', '720', '480', '360', 'HD', 'SD'],
+		maxConsecutiveTabs = 5
+	) {
 		this.page = page;
 		this.browser = browser;
 		this.url = url;
 		this.maxConsecutiveTabs = maxConsecutiveTabs;
+		this.downloadQualities = downloadQualities.map(c => (c == 'HD' ? 2 : c == 'SD' ? 1 : c));
 	}
 
 	async getEpDownloadPage(epLink) {
@@ -119,17 +129,17 @@ class CustomPage {
 
 		await this.later(2000);
 
-		for (const qualityObj of downloadQualities) {
+		for (const qualityObj of downloadQualities.filter(c => this.downloadQualities.includes(c.q))) {
 			await tempPage.evaluate(quality => {
 				Array.from(document.querySelector('.mirror_link').querySelectorAll('a'))
-					.filter(c => c.innerText.includes(quality == 1 ? 'SD' : quality == 2? 'HD' : quality))[0]
+					.filter(c => c.innerText.includes(quality == 1 ? 'SD' : quality == 2 ? 'HD' : quality))[0]
 					.click();
 			}, qualityObj.q);
 
 			await this.later(1000);
 
 			if (downloadLinkData.referrer && downloadLinkData.url) {
-				downloadLinkData.quality = qualityObj.q;
+				downloadLinkData.quality = qualityObj.q == 1 ? 'SD' : qualityObj.q == 2 ? 'HD' : qualityObj.q;
 				break;
 			}
 
@@ -141,7 +151,7 @@ class CustomPage {
 			await this.later(1000);
 		}
 
-		downloadLinkData.qualities = downloadQualities.map(c => c.q);
+		downloadLinkData.qualities = downloadQualities.map(c => (c.q == 1 ? 'SD' : c.q == 2 ? 'HD' : c.q));
 
 		await tempPage.close();
 
@@ -232,7 +242,15 @@ const main = async url => {
 			chalk.hex('#80D8FF')('Got all links:'),
 			chalk.hex(failedEps.length ? '#DD2C00' : '#00C853')(!failedEps.length)
 		);
-		if (failedEps.length) console.log(chalk.hex('#DD2C00')(`Failed to fetch download links for these episodes: ${failedEps.reduce((a,c) => `${a} ${c.ep}`, '')}`));
+		if (failedEps.length)
+			console.log(
+				chalk.hex('#DD2C00')(
+					`Failed to fetch download links for these episodes: ${failedEps.reduce(
+						(a, c) => `${a} ${c.ep}`,
+						''
+					)}`
+				)
+			);
 		console.log();
 		if (!failedEps.length) {
 			try {
@@ -263,7 +281,8 @@ const main = async url => {
 				])
 			);
 
-			console.log(chalk.hex('#00E676')('Run "python main.py" to start the download!'));
+			await exec('python main.py');
+			console.log(chalk.hex('#00E676')('Started Downloads in IDM!'));
 			console.log();
 		}
 	} catch (e) {
@@ -286,6 +305,9 @@ rl.question(chalk.bold.hex('#F8EFBA')('Input exact anime url from animekisa.tv: 
 	console.log(chalk.hex('#80D8FF')(url));
 	console.log();
 
-	main(url).catch(e => { console.log(e); console.log(chalk.hex('#DD2C00')('An error occurred'))});
+	main(url).catch(e => {
+		console.log(e);
+		console.log(chalk.hex('#DD2C00')('An error occurred'));
+	});
 	rl.close();
 });

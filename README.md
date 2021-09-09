@@ -13,9 +13,10 @@
 ###   To Download Anime:
 ```=>``` First get the url of the anime u want to download from https://animekisa.tv/ (make sure the url is of the overview page (e.g https://animekisa.tv/death-parade-dubbed ) and not some episode    
 ```=>``` Then go into the repo and run ```npm start```  
+```=>``` Make sure IDM is running  
 ```=>``` Then enter the url when prompted  
 ```=>``` Wait for it to download links  
-```=>``` Make sure IDM is running  
-```=>``` After its finished, run ```python main.py``` to start the downloads, the downloads will be saved to E:\Anime\\```{name}```  
+```=>``` After its finished getting the links, it will automatically start the download if all links were successfully fetched.   
+```=>``` The downloads will be saved to D:\Anime\\```{name}```   
 
 #### There Probably will be alot of bugs, i havent tested everything, so if u find any, let me know
