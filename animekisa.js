@@ -38,18 +38,55 @@ class CustomPage {
 		this.downloadQualities = downloadQualities.map(c => (c == 'HD' ? 2 : c == 'SD' ? 1 : c));
 	}
 
+	async getEpDownloadPage(epLink) {
+		const tempPage = await this.browser.newPage();
+
+		await tempPage.goto(epLink, {
+			waitUntil: 'networkidle0',
+		});
+
+		let downloadPage = await tempPage.evaluate(() => {
+			return VidStreaming?.replace('load.php', 'download');
+		});
+
+		await tempPage.close();
+
+		return downloadPage;
+	}
+
 	async getEpDownloadPages(failedEps) {
 		let downloadPages = [];
 
-		const epData = await this.page.evaluate(() => epData);
+		const epCount =
+			failedEps?.length || (await this.page.evaluate(() => document.querySelectorAll('.infoepboxmain a').length));
 
-		console.log(chalk.hex('#80D8FF')(`Total download pages: ${failedEps.length || epData.eptotal}`));
+		const tabs = this.maxConsecutiveTabs;
+		const turns = Math.ceil(epCount / tabs);
+		const batches = [];
+
+		batches.length = turns;
+		batches.fill(tabs);
+		batches[turns - 1] = epCount % tabs || tabs;
+
+		console.log(chalk.hex('#80D8FF')(`Total download pages: ${epCount}`));
 		console.log();
 		console.log(chalk.hex('#80D8FF')('Fetching download pages...'));
 
-		for (let i = 0; i < epData.eptotal; i++)
-			if (!failedEps.length || failedEps.find(c => c.ep == i + 1))
-				downloadPages.push(`https://goload.pro/download?${epData[i].match(/id=[^&]*(?=&)/g)[0]}`);
+		for (let j = 0; j < turns; j++) {
+			let _downloadPages = [];
+
+			for (let i = 1; i <= batches[j]; i++) _downloadPages.push(i + tabs * j);
+
+			_downloadPages = failedEps?.length ? _downloadPages.map((c, i) => failedEps[i * j].ep) : _downloadPages;
+
+			_downloadPages = await Promise.all(
+				_downloadPages.map(ep => this.getEpDownloadPage(`${this.url}-episode-${ep}`))
+			);
+
+			downloadPages.push(..._downloadPages);
+
+			console.log(chalk.hex('#B9F6CA')(downloadPages.length + '...'));
+		}
 
 		return downloadPages;
 	}
@@ -58,15 +95,32 @@ class CustomPage {
 		const downloadLinkData = { ep };
 		const tempPage = await this.browser.newPage();
 
+		await tempPage.setRequestInterception(true);
+		tempPage.on('request', request => {
+			if (request.url().includes('.anicdn.stream/')) return request.abort();
+			if (request.url().includes('storage.googleapis.com/')) {
+				downloadLinkData.url = request.url();
+				downloadLinkData.referrer = downloadPage;
+				return request.abort();
+			}
+			request.continue();
+		});
+
+		tempPage.on('response', response => {
+			if (response.headers().location?.includes('.anicdn.stream/')) {
+				downloadLinkData.referrer = response.url();
+				downloadLinkData.url = response.headers().location;
+			}
+		});
+
 		await tempPage.goto(downloadPage, {
 			waitUntil: 'networkidle0',
 			timeout: 200000,
 		});
-		// await this.later(10000000)
 
 		let downloadQualities = await tempPage.evaluate(() => {
-			return Array.from(document.querySelector('.mirror_link')?.querySelectorAll('a') || [])
-				?.map(c => ({
+			return Array.from(document.querySelector('.mirror_link').querySelectorAll('a'))
+				.map(c => ({
 					q: c.innerText
 						.match(/\d+(?=P)|HD|SD/)[0]
 						?.replace('HD', 2)
@@ -78,16 +132,16 @@ class CustomPage {
 
 		await this.later(2000);
 
-		for (const qualityObj of downloadQualities?.filter(c => this.downloadQualities.includes(c.q))) {
-			downloadLinkData.url = await tempPage.evaluate(quality => {
-				return Array.from(document.querySelector('.mirror_link').querySelectorAll('a')).filter(c =>
-					c.innerText.includes(quality == 1 ? 'SD' : quality == 2 ? 'HD' : quality)
-				)[0].href;
+		for (const qualityObj of downloadQualities.filter(c => this.downloadQualities.includes(c.q))) {
+			await tempPage.evaluate(quality => {
+				Array.from(document.querySelector('.mirror_link').querySelectorAll('a'))
+					.filter(c => c.innerText.includes(quality == 1 ? 'SD' : quality == 2 ? 'HD' : quality))[0]
+					.click();
 			}, qualityObj.q);
 
 			await this.later(1000);
 
-			if (downloadLinkData.url) {
+			if (downloadLinkData.referrer && downloadLinkData.url) {
 				downloadLinkData.quality = qualityObj.q == 1 ? 'SD' : qualityObj.q == 2 ? 'HD' : qualityObj.q;
 				break;
 			}
@@ -123,11 +177,8 @@ class CustomPage {
 				downloadPages.slice(tabs * j, tabs * (j + 1)).map(async (downloadPage, ep) => {
 					let downloadLinkData;
 					for (let k = 0; k < 2; k++) {
-						downloadLinkData = await this.getDownloadLinkData(
-							downloadPage,
-							failedEps.length ? failedEps[ep + j * tabs].ep : ep + 1 + j * tabs
-						);
-						if (downloadLinkData.url) break;
+						downloadLinkData = await this.getDownloadLinkData(downloadPage, ep + 1 + j * tabs);
+						if (downloadLinkData.url && downloadLinkData.referrer) break;
 					}
 					return downloadLinkData;
 				})
@@ -146,10 +197,10 @@ class CustomPage {
 	async getAnimeName() {
 		await this.page.goto(this.url, {
 			waitUntil: 'networkidle0',
-			timeout: 1000000,
 		});
 
-		let animeName = await this.page.evaluate(() => document.querySelector('#aligncenter .animetitle').innerText);
+		let animeName = await this.page.evaluate(() => document.querySelector('h1.infodes').innerText);
+
 		return animeName.replace(/:/g, ' - ');
 	}
 
@@ -178,18 +229,17 @@ const main = async url => {
 
 		const storedFailedEps = storedDownloadLinksData?.failedEps;
 
-		let downloadLinksData = await Page.getDownloadLinksData(storedFailedEps);
+		const downloadLinksData = await Page.getDownloadLinksData(storedFailedEps);
 
-		const failedEps = downloadLinksData.links.filter(c => !c.url);
+		const failedEps = downloadLinksData.links.filter(c => !c.referrer || !c.url);
 
 		downloadLinksData = { name: animeName, failedEps, ...downloadLinksData };
-
-		console.log({ downloadLinksData, storedDownloadLinksData, storedFailedEps });
 
 		if (storedFailedEps?.length) {
 			downloadLinksData.links.push(
 				...storedDownloadLinksData.links.filter(c => !storedFailedEps.find(cur => cur.ep == c.ep))
 			);
+
 			downloadLinksData.links.sort((a, b) => a.ep - b.ep);
 		}
 
@@ -256,7 +306,7 @@ const main = async url => {
 				])
 			);
 
-			await exec('python main.py');
+			await exec('python animekisa.py');
 			console.log(chalk.hex('#00E676')('Started Downloads in IDM!'));
 			console.log();
 		}
@@ -274,8 +324,8 @@ const rl = readline.createInterface({
 	output: process.stdout,
 });
 
-rl.question(chalk.bold.hex('#F8EFBA')('Input exact anime url from https://animixplay.to/: '), url => {
-	if (!url?.startsWith('https://animixplay.to/')) {
+rl.question(chalk.bold.hex('#F8EFBA')('Input exact anime url from animekisa.tv: '), url => {
+	if (!url || !url.startsWith('https://animekisa.tv/')) {
 		console.log(chalk.hex('#DD2C00')('Invalid URL!'));
 		return rl.close();
 	}
