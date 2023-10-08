@@ -1,5 +1,8 @@
 # Anime Downloader
 
+# *DOESN'T WORK ANYMORE AS THE SITE GOT TAKEN DOWN*
+
+
 ###   Requirements:
 ```=>``` Node version 12+  
 ```=>``` Python version 3+  
